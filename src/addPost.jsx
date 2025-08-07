@@ -26,16 +26,15 @@ function AddPost() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ title, content }),
-        // 1. Tambahkan 'credentials: include' untuk mengirim cookie otentikasi
-        // Ini akan memberitahu backend siapa yang membuat post ini.
-        credentials: 'include',
+        // 1. Tambahkan 'credentials: include' untuk mengirim cookie otentikasi Ini akan memberitahu backend siapa yang membuat post ini.
+        credentials: "include",
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         // Cek jika error karena belum login
         if (response.status === 401) {
-            throw new Error("You must be logged in to create a post.");
+          throw new Error("You must be logged in to create a post.");
         }
         throw new Error(errorData.message || "Failed to add post.");
       }
@@ -57,7 +56,10 @@ function AddPost() {
         </h2>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <div
+            className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
+            role="alert"
+          >
             <span className="block sm:inline">{error}</span>
           </div>
         )}
@@ -101,7 +103,7 @@ function AddPost() {
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline dark:bg-blue-500 dark:hover:bg-blue-600 disabled:opacity-50"
               disabled={loading}
             >
-              {loading ? 'Adding...' : 'Add Post'}
+              {loading ? "Adding..." : "Add Post"}
             </button>
             <button
               type="button"

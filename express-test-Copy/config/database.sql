@@ -1,0 +1,42 @@
+-- CREATE TABLE `Users` (
+--   `id` INT NOT NULL AUTO_INCREMENT,
+--   `name` VARCHAR(255) NOT NULL,
+--   `email` VARCHAR(255) NOT NULL,
+--   `password` VARCHAR(255) NULL, 
+--   `provider` ENUM('local', 'google') NOT NULL DEFAULT 'local',
+--   `googleId` VARCHAR(255) NULL,
+--   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   PRIMARY KEY (`id`),
+--   UNIQUE KEY `email_unique` (`email`),
+--   UNIQUE KEY `googleId_unique` (`googleId`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- CREATE TABLE `Posts` (
+--   `id` INT NOT NULL AUTO_INCREMENT,
+--   `title` VARCHAR(255) NOT NULL,
+--   `slug` VARCHAR(255) NOT NULL,
+--   `content` TEXT NOT NULL,
+--   `published_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP, 
+--   `authorId` INT NOT NULL,
+--   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   PRIMARY KEY (`id`),
+--   UNIQUE KEY `slug_unique` (`slug`),
+--   KEY `authorId_idx` (`authorId`),
+--   CONSTRAINT `fk_post_author` FOREIGN KEY (`authorId`) REFERENCES `Users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- CREATE TABLE `Comments` (
+--   `id` INT NOT NULL AUTO_INCREMENT,
+--   `content` TEXT NOT NULL,
+--   `authorId` INT NOT NULL,
+--   `postId` INT NOT NULL,
+--   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   PRIMARY KEY (`id`),
+--   KEY `authorId_idx` (`authorId`),
+--   KEY `postId_idx` (`postId`),
+--   CONSTRAINT `fk_comment_author` FOREIGN KEY (`authorId`) REFERENCES `Users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+--   CONSTRAINT `fk_comment_post` FOREIGN KEY (`postId`) REFERENCES `Posts` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

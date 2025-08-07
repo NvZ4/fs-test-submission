@@ -1,136 +1,135 @@
 import { Router } from "express";
-import Comment from "../models/comments-model.js";
-import Post from "../models/posts-model.js";
-import { loginRequired } from '../auth/auth-middleware.js'; // 1. Import the authentication middleware
+import { User, Post, Comment } from '../models/index.js'; 
+import { loginRequired } from '../auth/auth-middleware.js'; 
 
-// Use mergeParams to access postId from the parent router (post.js)
+// Gunakan mergeParams agar bisa mengakses 'postId' dari router induk (post.js)
 const router = Router({ mergeParams: true });
 
-// --- Public Route ---
+// --- Rute Publik ---
 
-// GET all comments for a specific post
+// GET: Mendapatkan semua komentar untuk sebuah post dengan paginasi
 router.get('/', async (req, res) => {
     const { postId } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
+    const offset = (page - 1) * limit;
 
     try {
-        const totalComments = await Comment.countDocuments({ postId: postId });
-        const totalPages = Math.ceil(totalComments / limit);
-
-        const comments = await Comment.find({ postId: postId })
-            .populate('author', 'name') // 2. Populate the author's name
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(limit);
+        const { count, rows } = await Comment.findAndCountAll({
+            where: { postId },
+            limit,
+            offset,
+            include: [{
+                model: User,
+                as: 'author',
+                attributes: ['id', 'name'] // Hanya sertakan ID dan nama penulis
+            }],
+            order: [['createdAt', 'DESC']] // Urutkan dari yang terbaru
+        });
 
         res.json({
-            comments,
-            totalPages,
+            comments: rows,
+            totalPages: Math.ceil(count / limit),
             currentPage: page,
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Gagal mengambil komentar: " + error.message });
     }
 });
 
-// --- Protected Routes ---
+// --- Rute Terproteksi (Membutuhkan Login) ---
 
-// POST a new comment for a specific post
-router.post('/', loginRequired, async (req, res) => { // 3. Protect the route
+// POST: Membuat komentar baru untuk sebuah post
+router.post('/', loginRequired, async (req, res) => {
     const { postId } = req.params;
     const { content } = req.body;
 
-    if (!content) {
-        return res.status(400).json({ message: 'Comment content is required' });
+    if (!content || !content.trim()) {
+        return res.status(400).json({ message: 'Konten komentar tidak boleh kosong' });
     }
 
     try {
-        const post = await Post.findById(postId);
+        // Pastikan post-nya ada
+        const post = await Post.findByPk(postId);
         if (!post) {
-            return res.status(404).json({ message: 'Post not found' });
+            return res.status(404).json({ message: 'Post tidak ditemukan' });
         }
 
-        // 4. Create the comment and associate it with the post and author
+        // Buat komentar baru
         const newComment = await Comment.create({
-            content: content,
-            postId: postId,
-            author: req.user._id // Get user ID from the authenticated user
+            content,
+            postId: parseInt(postId, 10), // Pastikan postId adalah integer
+            authorId: req.user.id // Ambil ID dari user yang sedang login
         });
 
-        // Add the new comment's ID to the post's comments array
-        post.comments.push(newComment._id);
-        await post.save();
+        // Ambil kembali data komentar lengkap dengan info author untuk dikirim sebagai respons
+        const commentWithAuthor = await Comment.findByPk(newComment.id, {
+            include: [{ model: User, as: 'author', attributes: ['id', 'name'] }]
+        });
 
-        // Populate author for the response
-        await newComment.populate('author', 'name');
-
-        res.status(201).json(newComment);
+        res.status(201).json(commentWithAuthor);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        res.status(400).json({ message: "Gagal menambahkan komentar: " + error.message });
     }
 });
 
-// PUT /:commentId - Update a comment
+// PUT: Memperbarui komentar
 router.put('/:commentId', loginRequired, async (req, res) => {
     const { commentId } = req.params;
     const { content } = req.body;
 
-    if (!content) {
-        return res.status(400).json({ message: 'Comment content is required' });
+    if (!content || !content.trim()) {
+        return res.status(400).json({ message: 'Konten komentar tidak boleh kosong' });
     }
 
     try {
-        const comment = await Comment.findById(commentId);
+        const comment = await Comment.findByPk(commentId);
         if (!comment) {
-            return res.status(404).json({ message: "Comment not found." });
+            return res.status(404).json({ message: "Komentar tidak ditemukan." });
         }
 
-        // 5. Authorization Check: Ensure the user owns the comment
-        if (comment.author.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: "Forbidden: You cannot edit this comment." });
+        // Otorisasi: Pastikan hanya pemilik komentar yang bisa mengedit
+        if (comment.authorId !== req.user.id) {
+            return res.status(403).json({ message: "Akses ditolak: Anda bukan pemilik komentar ini." });
         }
 
+        // Update konten komentar
         comment.content = content;
         await comment.save();
-
-        await comment.populate('author', 'name');
-        res.status(200).json(comment);
-
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// DELETE /:commentId - Delete a comment
-router.delete('/:commentId', loginRequired, async (req, res) => {
-    const { postId, commentId } = req.params;
-
-    try {
-        const comment = await Comment.findById(commentId);
-        if (!comment) {
-            return res.status(404).json({ message: "Comment not found." });
-        }
-
-        // 6. Authorization Check: Ensure the user owns the comment
-        if (comment.author.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: "Forbidden: You cannot delete this comment." });
-        }
-
-        // Remove the comment
-        await Comment.findByIdAndDelete(commentId);
-
-        // Also remove the comment's ID from the parent post's array
-        await Post.findByIdAndUpdate(postId, {
-            $pull: { comments: commentId }
+        
+        // Ambil data terbaru dengan author untuk respons
+        const updatedComment = await Comment.findByPk(comment.id, {
+             include: [{ model: User, as: 'author', attributes: ['id', 'name'] }]
         });
 
-        res.status(200).json({ message: 'Comment deleted successfully' });
-
+        res.status(200).json(updatedComment);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Gagal memperbarui komentar: " + error.message });
     }
 });
 
+// DELETE: Menghapus komentar
+router.delete('/:commentId', loginRequired, async (req, res) => {
+    const { commentId } = req.params;
+
+    try {
+        const comment = await Comment.findByPk(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: "Komentar tidak ditemukan." });
+        }
+
+        // Otorisasi: Pastikan hanya pemilik komentar yang bisa menghapus
+        if (comment.authorId !== req.user.id) {
+            return res.status(403).json({ message: "Akses ditolak: Anda bukan pemilik komentar ini." });
+        }
+
+        // Hapus komentar dari database
+        await comment.destroy();
+
+        res.status(200).json({ message: 'Komentar berhasil dihapus' });
+    } catch (error) {
+        res.status(500).json({ message: "Gagal menghapus komentar: " + error.message });
+    }
+});
 
 export default router;

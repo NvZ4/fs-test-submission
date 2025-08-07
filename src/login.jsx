@@ -28,8 +28,7 @@ function Login({ onLoginSuccess }) {
         throw new Error(data.message || "Failed to log in.");
       }
 
-      // 2. Panggil fungsi onLoginSuccess dengan data user dari backend
-      // Ini akan mengupdate state di App.jsx secara instan
+      // 2. Panggil fungsi onLoginSuccess dengan data user dari backend. Ini akan mengupdate state di App.jsx secara instan
       if (onLoginSuccess) {
         onLoginSuccess(data.user);
       }
@@ -58,7 +57,6 @@ function Login({ onLoginSuccess }) {
         )}
 
         <form onSubmit={handleSubmit}>
-          {/* ... sisa kode JSX tidak berubah ... */}
           <div className="mb-4">
             <label
               htmlFor="email"

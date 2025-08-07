@@ -1,27 +1,31 @@
-import mongoose, { Schema } from 'mongoose'; // Import Schema here
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/database.js';
 
-const PostSchema = new Schema({ // Use Schema directly
-    author: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    },
-    title: {
-        type: String,
-        required: true
-    },
-    content: {
-        type: String,
-        required: true
-    },
-    comments: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Comment' // Reference to Comment model
-    }]
-},
-{
-    timestamps: true // Automatically add createdAt and updatedAt fields
+const Post = sequelize.define('Post', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  slug: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  published_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  timestamps: true
 });
 
-const Post = mongoose.model('Post', PostSchema);
 export default Post;

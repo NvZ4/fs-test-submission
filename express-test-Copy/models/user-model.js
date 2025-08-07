@@ -1,60 +1,63 @@
-// models/user-model.js
-import mongoose, { Schema } from 'mongoose';
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/database.js';
 import bcrypt from 'bcrypt';
 
-const UserSchema = new Schema({
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+    validate: {
+      isEmail: true,
     },
-    name: {
-        type: String,
-        required: true,
-    },
-    password: {
-        type: String,
-        // Password is not required if logging in via Google
-        required: function() { return this.provider === 'local'; }
-    },
-    provider: {
-        type: String,
-        enum: ['local', 'google'],
-        default: 'local',
-    },
-    googleId: {
-        type: String,
-        unique: true,
-        sparse: true, // Allows multiple null values, but unique if a value exists
-    },
-    passwordReset: {
-        type: Boolean,
-        default: false,
-    }, 
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: true, // Bisa null jika login dengan Google
+  },
+  provider: {
+    type: DataTypes.ENUM('local', 'google'),
+    defaultValue: 'local',
+    allowNull: false,
+  },
+  googleId: {
+    type: DataTypes.STRING,
+    unique: true,
+  },
 }, {
-    timestamps: true
-});
-
-// Hash password before saving for local users
-UserSchema.pre('save', async function(next) {
-    // Only hash the password if it has been modified (or is new) and provider is local
-    if (this.provider !== 'local' || !this.isModified('password')) {
-        return next();
-    }
-    try {
+  timestamps: true, // Otomatis membuat kolom createdAt dan updatedAt
+  hooks: {
+    // Hash password sebelum user dibuat
+    beforeCreate: async (user) => {
+      if (user.password) {
         const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (err) {
-        next(err);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
+    },
+    // Hash password jika diubah
+    beforeUpdate: async (user) => {
+      if (user.changed('password') && user.password) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
     }
+  }
 });
 
-// Method to compare passwords
-UserSchema.methods.comparePassword = function(candidatePassword) {
-    return bcrypt.compare(candidatePassword, this.password);
+// Method untuk membandingkan password
+User.prototype.comparePassword = function(candidatePassword) {
+  // Memastikan ada password untuk dibandingkan (login Google)
+  if (!this.password) return Promise.resolve(false);
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-const User = mongoose.model('User', UserSchema);
 export default User;

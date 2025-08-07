@@ -1,121 +1,103 @@
 import { Router } from 'express';
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
-import User from '../models/user-model.js';
+import { User } from '../models/index.js';
 import { loginRequired } from './auth-middleware.js';
 
 const authRouter = Router();
 
-/**
- * @description Signs a JWT and sets it as an HTTP-Only cookie.
- * @param {object} res - The Express response object.
- * @param {object} user - The user object to be encoded in the token.
- */
 const setUserToken = (res, user) => {
-  // Create a plain user object without the hashed password
+  // Ambil data user sebagai plain object dan gunakan 'id' bukan '_id'
   const plainUser = {
-    _id: user._id,
+    id: user.id, // Ganti dari _id ke id
     email: user.email,
     name: user.name,
   };
 
-  // Sign the JWT
-  const token = jwt.sign(plainUser, process.env.JWT_SECRET_KEY, { expiresIn: '1d' }); //
+  const token = jwt.sign(plainUser, process.env.JWT_SECRET_KEY, { expiresIn: '1d' });
 
-  // Set the token in an HTTP-Only cookie for security
   res.cookie('token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-    sameSite: 'strict', // Mitigates CSRF attacks
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
   });
 };
 
-// --- Authentication Routes ---
-
 // POST /auth/register
-// Route for new user registration.
 authRouter.post('/register', async (req, res, next) => {
   const { name, email, password } = req.body;
 
-  // Basic validation
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Name, email, and password are required.' });
   }
 
   try {
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Gunakan method 'findOne' dari Sequelize
+    const existingUser = await User.findOne({ where: { email: email.toLowerCase() } });
     if (existingUser) {
       return res.status(409).json({ message: 'An account with this email already exists.' });
     }
 
-    const newUser = new User({
+    // Gunakan 'create' untuk membuat dan menyimpan user baru
+    // Hook 'beforeCreate' di model akan otomatis hash password
+    await User.create({
       name,
       email,
-      password, // The password will be hashed by the pre-save hook in user-model.js
+      password,
     });
 
-    await newUser.save();
     res.status(201).json({ message: 'Account created successfully. Please log in.' });
-
   } catch (error) {
+    // Tangani error validasi dari Sequelize
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(e => e.message);
+      return res.status(400).json({ message: messages.join(', ') });
+    }
     next(error);
   }
 });
 
-
 // POST /auth/login
-// Route for local email & password login.
 authRouter.post('/login', (req, res, next) => {
   passport.authenticate('local', { session: false }, (err, user, info) => {
-    // Jika ada error server (misal, koneksi DB putus)
-    if (err) {
-      return next(err);
-    }
-    // Jika otentikasi gagal (user tidak ditemukan atau password salah)
-    if (!user) {
-      // 'info.message' akan berisi pesan dari strategi passport kita
-      return res.status(401).json({ message: info.message || 'Login failed.' });
-    }
-    // Jika otentikasi berhasil
+    if (err) return next(err);
+    if (!user) return res.status(401).json({ message: info.message || 'Login failed.' });
+
     setUserToken(res, user);
-    // Hapus password dari objek user sebelum mengirim respons
-    const { password, ...userWithoutPassword } = user.toObject();
+    // Sequelize instance bisa langsung di-destructure, tidak perlu .toObject()
+    const { password, ...userWithoutPassword } = user.get({ plain: true });
     return res.status(200).json({ user: userWithoutPassword });
   })(req, res, next);
 });
 
-// GET /auth/google
-// The route that initiates the Google OAuth 2.0 login flow.
-authRouter.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] })); //
+// GET /auth/me (Untuk mengecek status login)
+authRouter.get('/me', loginRequired, (req, res) => {
+  // Middleware sudah menaruh user di req.user
+  // Kirim data user tanpa password
+  const { password, ...userWithoutPassword } = req.user.get({ plain: true });
+  res.status(200).json(userWithoutPassword);
+});
 
-// GET /auth/google/callback
-// Google redirects to this URL after the user has authenticated.
+authRouter.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
 authRouter.get('/google/callback',
   passport.authenticate('google', {
     session: false,
-    failureRedirect: '/login', // Redirect to login page on failure
+    failureRedirect: '/login',
   }),
   (req, res) => {
-    // On successful authentication, `req.user` will contain the user object.
     setUserToken(res, req.user);
-    // Redirect to the frontend application
-    res.redirect('/posts'); // Or your frontend's main/dashboard page
+    res.redirect('http://localhost:5173/posts'); // Redirect ke URL frontend
   }
 );
 
-authRouter.get('/me', loginRequired, (req, res) => {
-  // The loginRequired middleware already attached the user to req.user
-  res.status(200).json(req.user);
-});
-
-// POST /auth/logout
-// Route for logging the user out.
 authRouter.post('/logout', (req, res) => {
-  res.cookie('token', null, {
+  res.cookie('token', '', {
     httpOnly: true,
-    maxAge: 0, //
+    expires: new Date(0),
   });
   res.status(200).json({ message: 'Logout successful' });
 });
+
 
 export default authRouter;
