@@ -8,7 +8,6 @@ import './models/index.js';
 
 import { localStrategy, jwtStrategy, googleStrategy } from './auth/passport.js';
 
-import helloRouter from './hello.js';
 import postRouter from './routers/post.js';
 import authRouter from './auth/auth-router.js';
 import userRouter from './routers/user.js';
@@ -31,7 +30,6 @@ passport.use(googleStrategy);
 
 // --- Route Setup ---
 app.use('/auth', authRouter);
-app.use('/hello', helloRouter);
 app.use('/posts', postRouter);
 app.use('/users', userRouter);
 
